@@ -1,40 +1,153 @@
 # Contributing — CoSign
 
-Terima kasih mau berkontribusi! 🎉 Ikuti standar di bawah supaya review cepat & kode rapi.
+Terima kasih sudah ingin berkontribusi! 🎉
 
-## Branch
+Project ini adalah platform portofolio anak Creative Media (Bun + Hono + SQLite).
+Sebelum mulai, baca dulu **[AGENTS.md](AGENTS.md)** — berisi konvensi struktur
+folder, alur MVC, dan hal-hal yang sering salah dipahami.
 
-- Selalu branch dari `main`: `git checkout -b feat/nama-fitur`
-- Prefiks branch: `feat/` `fix/` `docs/` `refactor/` `test/`
+Daftar isi:
+1. [Cara Fork & Clone](#cara-fork--clone)
+2. [Buat Branch](#buat-branch)
+3. [Menjalankan Test](#menjalankan-test)
+4. [Gaya Commit Message](#gaya-commit-message)
+5. [Membuat Pull Request](#membuat-pull-request)
+6. [Laporkan Bug / Usulkan Fitur](#laporkan-bug--usulkan-fitur)
 
-## Commit (Conventional Commits)
+---
+
+## Cara Fork & Clone
+
+1. Klik tombol **Fork** di kanan atas halaman repo `github.com/ccit-venture/cosign`.
+
+2. Clone hasil fork ke lokal:
+
+```bash
+git clone https://github.com/<username-kamu>/cosign.git
+cd cosign
+```
+
+3. Tambahkan repo asli sebagai `upstream` (untuk sinkronisasi):
+
+```bash
+git remote add upstream https://github.com/ccit-venture/cosign.git
+```
+
+Pastikan remote sudah benar:
+
+```bash
+git remote -v
+# origin   → repo fork kamu
+# upstream → ccit-venture/cosign
+```
+
+4. Sinkronkan branch `master` kamu dengan upstream:
+
+```bash
+git checkout master
+git pull upstream master
+```
+
+> Selalu `pull upstream master` sebelum mulai bekerja supaya tidak bentrok saat
+> review.
+
+---
+
+## Buat Branch
+
+Gunakan nama branch yang deskriptif dan mengikuti pola:
+
+| Jenis | Contoh nama branch |
+|-------|--------------------|
+| Fitur baru | `feat/komentar-karya` |
+| Perbaikan bug | `fix/upload-video-gagal` |
+| Dokumentasi | `docs/update-readme` |
+| Refactor | `refactor/pisah-middleware-auth` |
+| Test | `test/tambah-user-model` |
+
+```bash
+git checkout -b feat/nama-fitur
+```
+
+Kerjakan perubahan di branch ini, lalu commit.
+
+---
+
+## Menjalankan Test
+
+**Wajib** menjalankan test sebelum submit PR:
+
+```bash
+bun test
+```
+
+DB test memakai SQLite **in-memory** (`:memory:`) — tidak menyentuh `data/app.db`.
+Jika menyentuh class Tailwind, jalankan juga:
+
+```bash
+bun run build:css
+```
+
+CI otomatis juga menjalankan `bun test` + `bun run build:css` di setiap push/PR.
+
+---
+
+## Gaya Commit Message
+
+Ikuti gaya repo saat ini (Conventional-ish short subject):
 
 ```
-feat: tambah komentar pada karya
-fix: perbaiki upload video gagal
-docs: update README cara deploy
-test: tambah unit test UserModel
-refactor: pisah middleware auth
+<tipe>: <deskripsi singkat>
 ```
 
-Jenis umum: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`.
+Tipe yang dipakai:
 
-## Sebelum Pull Request
+- `feat:` — fitur baru
+- `fix:` — perbaikan bug
+- `refactor:` — perubahan struktur tanpa mengubah perilaku
+- `docs:` — dokumentasi (README, AGENTS.md)
+- `test:` — test / CI
 
-1. Jalankan `bun test` — pastikan semua lulus
-2. Jalankan `bun run build:css` kalau menyentuh class Tailwind
-3. Cek tidak ada secret ter-commit (`.env`, `SUPABASE_URL`, dll.)
-4. Buka PR pakai template `.github/pull_request_template.md`
-5. Review minimal 1 orang sebelum merge (merge ke `main`)
+Contoh:
 
-## Testing
+```bash
+git add src/models/karya.model.ts test/karya.model.test.ts
+git commit -m "feat: tambah komentar pada karya"
+```
 
-- Framework: `bun test` (test files di folder `test/`)
-- DB test pakai SQLite in-memory (`:memory:`) — tidak menyentuh `data/app.db`
-- Tambahkan test untuk setiap model/controller baru
+> Satu commit sedapat mungkin mewakili satu perubahan logis. Jangan commit
+> perubahan yang tidak saling berhubungan.
 
-## Keamanan
+---
 
-- Jangan pernah commit `.env` atau key apa pun
-- Password wajib di-hash (`Bun.password`), jangan simpan plaintext
-- Kalau menemukan celah keamanan, laporkan via issue (jangan publish dulu)
+## Membuat Pull Request
+
+1. Push branch kamu ke fork:
+
+```bash
+git push origin feat/nama-fitur
+```
+
+2. Di GitHub, buka halaman repo asli → tombol **Compare & pull request**.
+
+3. Isi template PR yang otomatis muncul. Lengkapi:
+   - Deskripsi perubahan
+   - Issue yang di-fix (`closes #<nomor>`)
+   - Checklist (pastikan test lulus)
+
+4. Setelah submit, CI akan berjalan otomatis. Pastikan semua job hijau.
+
+5. Maintainer akan me-review. Perbaiki masukan dengan menambahkan commit baru
+   pada branch yang sama (bukan force-push ke branch yang sudah di-review).
+
+---
+
+## Laporkan Bug / Usulkan Fitur
+
+Gunakan template issue yang sudah disediakan:
+
+- 🐛 [Laporan Bug](.github/ISSUE_TEMPLATE/bug_report.md)
+- ✨ [Permintaan Fitur](.github/ISSUE_TEMPLATE/feature_request.md)
+
+Untuk masalah keamanan, JANGAN buka issue publik — ikuti petunjuk di
+[SECURITY.md](SECURITY.md).
