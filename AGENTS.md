@@ -6,13 +6,23 @@ tidak merusak struktur, path import, atau konvensi yang sudah ada.
 ## Ringkasan Proyek
 
 Platform portofolio anak **Creative Media (CM)** — share karya, explore karya
-teman, like, dan punya halaman profil publik.
+teman, like, dan punya halaman profil publik. Konsep karya ala **blush.design**:
+setiap karya disusun dari **bagian-bagian gambar** (`kepala`, `badan`,
+`background`) yang di-upload dan bisa di-custom (pilih part per kategori +
+toggle visibilitas).
 
-Stack: **Bun + Hono + SQLite + Tailwind + vanilla JS** (MVC).
+Stack: **Bun + Hono + Eta (template engine) + SQLite + Tailwind + vanilla JS** —
+server-rendered MVC (gaya Laravel).
 
 Arsitektur alur:
-**View** (`public/`) → fetch → **Routes** (`src/routes/`) → **Controller**
-(`src/controllers/`) → **Model** (`src/models/`) → SQLite.
+**Browser (form POST)** → **Routes** (`src/routes/web.ts`) → **Controller**
+(`src/controllers/`) → **Model** (`src/models/`) → SQLite, lalu Controller
+mengembalikan **View Eta** (`views/`) → HTML. Gambar part di `uploads/`
+di-serve statis.
+
+**TIDAK ada JSON API** — semua submit via form POST + redirect (PRG).
+Jangan menambahkan route `/api/*` atau `fetch()` ke endpoint JSON.
+**UI web berbahasa Inggris.**
 
 ## Standar Kontribusi & Open Source
 
@@ -29,43 +39,109 @@ Repositori ini publik (open source) di `ccit-venture/cosign`. Perhatikan:
   `bun run build:css` di setiap push/PR ke `master`. Pastikan semua hijau
   sebelum merge.
 
-## Struktur Penting (`src/`)
+## Struktur Penting
 
 ```
 src/
 ├── index.ts                # entry: server Bun (port 3000). JANGAN taruh logika bisnis di sini
-├── app.ts                  # createApp(db): middleware global + static files. Dipakai server & test
-├── db.ts                   # initDb() (sqlite | supabase) + migrate(). Skema SQL ada di sini (mode sqlite)
+├── app.ts                  # createApp(db): middleware (logger, secureHeaders, csrf) + static
+├── db.ts                   # initDb() (sqlite | supabase) + migrate()
+│                           #   tabel: users, sessions, karya, karya_parts, likes
+├── view.ts                 # setup Eta + helper view()/redirect()/flash*. Analog view() Laravel
+├── composition.ts          # latestParts / partsByCategory / withComposition (layered cards)
 ├── models/                 # MODEL — query SQL. Satu class per tabel/domain
-│   ├── user.model.ts       #   users
+│   ├── user.model.ts       #   users (auth)
 │   ├── session.model.ts    #   sessions
-│   └── karya.model.ts      #   karya + likes
-├── controllers/            # CONTROLLER — parse request → panggil model → response JSON
-│   ├── auth.controller.ts
-│   ├── karya.controller.ts
-│   └── profile.controller.ts
+│   └── karya.model.ts      #   karya + karya_parts + likes (parts, likeCount)
+├── controllers/            # CONTROLLER — parse form → model → view/redirect
+│   ├── auth.controller.ts  #   /admin/login, /admin/register, /admin/logout
+│   ├── page.controller.ts  #   GET / (explore), GET /profil/:username
+│   └── karya.controller.ts #   karyaAdminController (mounted /admin) +
+│                           #   karyaPublicController (mounted /) — detail/customizer + like
 ├── middleware/
-│   └── auth.middleware.ts  # getUserId / createSession / destroySession / requireAuth
-├── routes/
-│   └── index.ts            # api(db): pasang controller di bawah /api/*
-└── styles/input.css        # sumber Tailwind (compile → public/style.css)
+│   ├── auth.middleware.ts  # getUserId / createSession / destroySession / requireAuth / redirectIfAuthenticated
+│   └── locals.middleware.ts # inject user + flash ke context untuk semua halaman
+└── routes/
+    └── web.ts              # pasang controller + injectLocals(db)
+views/                      # VIEW — template Eta
+├── layouts/                # admin.eta.html & homepage.eta.html (pakai it.body)
+├── partials/               # navbar, errors, karya-card (komposisi ter-layer)
+├── admin/                  # auth/ (login, register) + karya/ (index, show)
+└── homepage/               # index (explore), karya (customizer), profil
+public/                     # aset statis: style.css (Tailwind), customizer.js
+uploads/                    # gambar part hasil upload (di-gitignore)
+test/                       # unit test
 ```
 
 ## Konvensi Penting
 
+### View Eta (kritis!)
+
+- File template bernama `*.eta.html` — jangan ubah ekstensi (konfigurasi
+  `defaultExtension` di `src/view.ts`).
+- Setiap halaman diawali `<% layout("/layouts/admin") %>` (atau homepage).
+  **Path layout/include WAJIB diawali `/`** agar relatif ke root `views/`
+  (misal `include("/partials/errors", {...})`) — tanpa `/`, Eta resolve relatif
+  ke folder template dan gagal.
+- **Konten halaman masuk ke layout via `it.body`** (bukan `it.content`).
+- Escape otomatis default (`<%=`). Gunakan `<%~` HANYA untuk HTML mentah
+  (contoh: flash/navbar via include).
+- Judul halaman: `<% it.title = "..." %>` di baris atas halaman.
+- **UI web wajib Bahasa Inggris** (label, flash, placeholder, dll).
+- Render di controller via `view(c, "homepage/karya", { karya, byCategory })`
+  dari `src/view.ts`.
+
+### Karya & Parts (blush.design)
+
+- `karya`: judul, deskripsi, kategori (`KATEGORI_LIST` di
+  `src/controllers/page.controller.ts`), dibuat tanpa media.
+- `karya_parts`: part gambar per kategori — **hanya** `kepala`, `badan`,
+  `background` (`PART_KATEGORI` di `src/controllers/karya.controller.ts`).
+  JANGAN menambah kategori lain tanpa mengubah konstanta ini.
+- Upload part: multipart → validasi `saveImage()` (whitelist
+  jpeg/png/gif/webp, maks **20MB**) → `uploads/<uuid>.<ext>` → `addPart()`.
+- **Owner check wajib**: semua route admin karya memeriksa
+  `isOwner(item, userId)` — jangan hapus guard ini.
+- Komposisi ter-layer: `latestParts()` (part terbaru per kategori) untuk
+  kartu explore/profil & preview customizer; `partsByCategory()` untuk
+  picker part. Lihat `src/composition.ts`.
+- Hapus karya = hapus baris DB **dan semua file part**
+  (`unlinkSync(media_path)`).
+- Customizer (`public/customizer.js`): klik thumbnail part → swap layer
+  (`data-kategori`/`data-src`), checkbox `.layer-toggle` → show/hide layer.
+
+### Routing (kritis!)
+
+- `karyaAdminController` di-mount di `/admin` → internal path **relatif**
+  (`"karya"`, `"karya/:id"`, dst) → jadi `/admin/karya*`.
+- `karyaPublicController` di-mount di `/` → internal `"karya/:id"` → `/karya/:id`.
+- **JANGAN mount controller yang sama di dua prefix** jika hasil path-nya
+  tumpang tindih — route pertama yang menang dan menyebabkan bug (pernah
+  terjadi: `/admin/karya/:id` ketimpa handler customizer).
+- Hapus karya/part: gunakan route POST khusus (`/delete`), bukan method DELETE.
+
+### Form & Request
+
+- Semua mutasi pakai `<form method="post">` → controller → `redirect(c, ...)`
+  (PRG). Jangan buat JSON API / fetch.
+- `c.req.parseBody()` untuk baca form (urlencoded/multipart; field file
+  kembali sebagai `File`).
+- Flash message: `flashSuccess` / `flashError` sebelum redirect; tampilkan di
+  layout via `it.flash`.
+
+### Auth & Middleware
+
+- `requireAuth(db)` redirect ke `/admin/login` (bukan 401 JSON).
+- `redirectIfAuthenticated(db)` untuk halaman guest (login/register) —
+  redirect ke `/admin/karya`.
+- `injectLocals(db)` dipasang sekali di `web.ts` — resolve `it.user` + `it.flash`.
+- Session cookie `sid` (httpOnly, 7 hari). Password wajib `Bun.password`
+  (argon2).
 - **DB driver env-driven** (`src/db.ts`): `DB_DRIVER=sqlite` (default) atau
-  `supabase`. Mode supabase **belum diimplementasikan** — tiap controller
-  mengecek `if (!db.sqlite)` lalu return `501`. JANGAN hapus guard ini.
-- **`createApp(db)`** — aplikasi Hono dibangun dari instance `Db`. Server
-  (`src/index.ts`) dan unit test (`test/helpers.ts`) sama-sama memakainya.
-- **Session cookie** `sid` (httpOnly, 7 hari) — helper di
-  `src/middleware/auth.middleware.ts`. Route yang butuh login memakai
-  `requireAuth(db)` dan membaca `c.get("userId")`.
-- **Upload** disimpan di `uploads/` (nama file randomUUID + ekstensi asli), lalu
-  di-serve lewat `serveStatic` di `src/app.ts`. Meta-nya disimpan di tabel
-  `karya` (`media_path`).
-- **Password** wajib `Bun.password.hash` / `Bun.password.verify` (argon2).
-  JANGAN simpan plaintext.
+  `supabase`. Mode supabase **belum diimplementasikan** — controller mengecek
+  `if (!db.sqlite)` lalu return `501`. JANGAN hapus guard ini.
+- CSRF: `hono/csrf` origin-check via `CSRF_ORIGIN` env (default
+  `http://localhost:3000`). Form POST dari origin lain → 403.
 - **`.env`** TIDAK pernah di-commit (sudah di `.gitignore`). Cukup ikuti
   `.env.example`.
 
@@ -84,17 +160,31 @@ bun test
 ```
 
 DB test memakai SQLite **in-memory** (`:memory:` di `test/helpers.ts`) — tidak
-menyentuh `data/app.db`. Tambahkan test untuk setiap model/controller baru.
+menyentuh `data/app.db`. Request test form POST wajib menyertakan header
+`origin: http://localhost:3000` (csrf) — lihat `formHeaders` di
+`test/helpers.ts`. Upload test memakai `FormData` + `File`; file hasil test
+dibersihkan (hapus karya/part = file ikut terhapus).
 
 ## Hal yang Sering Salah
 
-- **Meletakkan logika bisnis di `src/index.ts`** — entry hanya inisialisasi;
-  semua logika di controller/model.
+- **Menambahkan JSON API / fetch** — project ini murni form POST (PRG).
+- **`layout`/`include` tanpa prefix `/`** — template gagal ditemukan.
+- **Pakai `it.content` di layout** — Eta v4 mengirim body sebagai `it.body`.
+- **Mount controller sama di dua prefix dengan path tumpang tindih** — route
+  pertama menang, halaman salah. Pisahkan admin & publik controller.
+- **Mengubah `KATEGORI_LIST` / `PART_KATEGORI`** tanpa sinkron di form/view.
+- **Upload tanpa validasi tipe/ukuran** — wajib lewat `saveImage()`
+  (gambar saja, ≤ 20MB).
+- **Menghapus owner check** — user lain bisa menghapus karya/part orang lain.
+- **Menambah part kategori baru** — wajib sinkron: konstanta controller,
+  label view (`labels` di `admin/karya/show` & `homepage/karya`), dan
+  `karya-card` layer.
 - **Mengedit `public/style.css` langsung** — itu hasil compile Tailwind. Ubah
-  `src/styles/input.css` lalu jalankan `bun run build:css`.
-- **Menghapus guard `if (!db.sqlite)`** di controller — akan memecah mode
+  `src/styles/input.css` lalu `bun run build:css`.
+- **Menghapus guard `if (!db.sqlite)`** di controller — memecah mode
   sqlite-first.
-- **Commit file `.env` / `data/` / `uploads/`** — sudah di-ignore, jangan di-add
-  paksa (`git add -f`).
-- **Menambah route tanpa tes** — setiap endpoint baru sebaiknya punya coverage
-  di `test/`.
+- **POST tanpa Origin header di test** — kena 403 csrf.
+- **Commit file `.env` / `data/` / `uploads/`** — sudah di-ignore, jangan
+  di-add paksa (`git add -f`).
+- **Menambah route tanpa tes** — setiap halaman/aksi baru sebaiknya punya
+  coverage di `test/web.test.ts`.

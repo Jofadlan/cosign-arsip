@@ -1,0 +1,20 @@
+<% layout("/layouts/homepage") %>
+<% it.title = it.profil.username + " — CoSign" %>
+
+<div class="max-w-3xl mx-auto mb-10">
+  <h1 class="text-2xl font-bold"><%= it.profil.full_name || it.profil.username %></h1>
+  <p class="text-sm text-slate-500">@<%= it.profil.username %></p>
+  <% if (it.profil.bio) { %>
+    <p class="mt-2 text-slate-600 text-sm"><%= it.profil.bio %></p>
+  <% } %>
+</div>
+
+<% if (it.karya.length === 0) { %>
+  <p class="text-center text-slate-500 py-10">No work published yet.</p>
+<% } else { %>
+  <div class="grid grid-cols-2 sm:grid-cols-3 gap-5">
+    <% it.karya.forEach(function (k) { %>
+      <%~ include("/partials/karya-card", { k: k }) %>
+    <% }) %>
+  </div>
+<% } %>

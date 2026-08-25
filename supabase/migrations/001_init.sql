@@ -23,6 +23,13 @@ create table if not exists karya (
   judul text not null,
   deskripsi text,
   kategori text,
+  created_at timestamptz default now()
+);
+
+create table if not exists karya_parts (
+  id uuid primary key,
+  karya_id uuid references karya(id) on delete cascade,
+  kategori text not null,        -- 'kepala' | 'badan' | 'background'
   media_path text not null,
   media_type text,
   created_at timestamptz default now()

@@ -1,0 +1,75 @@
+<% layout("/layouts/homepage") %>
+<% it.title = it.karya.judul + " — CoSign" %>
+
+<div class="max-w-4xl mx-auto">
+  <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
+    <div>
+      <h1 class="text-2xl font-bold"><%= it.karya.judul %></h1>
+      <p class="text-sm text-slate-500">
+        by <a href="/profil/<%= it.karya.username %>" class="text-indigo-600 hover:underline"><%= it.karya.username %></a>
+        · <span class="bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full text-xs"><%= it.karya.kategori %></span>
+        · <span id="like-count"><%= it.karya.like_count %></span> <%= it.karya.like_count === 1 ? "like" : "likes" %>
+      </p>
+      <% if (it.karya.deskripsi) { %>
+        <p class="mt-2 text-slate-600 text-sm max-w-xl"><%= it.karya.deskripsi %></p>
+      <% } %>
+    </div>
+    <% if (it.user) { %>
+      <form method="post" action="/karya/<%= it.karya.id %>/like">
+        <button type="submit" class="bg-pink-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-pink-700">♥ Like</button>
+      </form>
+    <% } else { %>
+      <a href="/admin/login" class="bg-pink-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-pink-700">♥ Like</a>
+    <% } %>
+  </div>
+
+  <p class="text-xs text-slate-400 mb-2">Click a part below to swap it into the composition. Toggle layers with the checkboxes.</p>
+
+  <div class="grid md:grid-cols-[1fr_320px] gap-6">
+    <!-- Composition preview -->
+    <div id="compose" class="relative w-full aspect-[3/4] bg-slate-100 border border-slate-200 rounded-xl overflow-hidden max-w-md mx-auto">
+      <img data-layer="background" src="<%= it.karya.parts.background ? '/uploads/' + it.karya.parts.background.replace(/^uploads\//, '') : '' %>" alt=""
+        class="absolute inset-0 w-full h-full object-cover <%= it.karya.parts.background ? '' : 'hidden' %>" />
+      <img data-layer="badan" src="<%= it.karya.parts.badan ? '/uploads/' + it.karya.parts.badan.replace(/^uploads\//, '') : '' %>" alt=""
+        class="absolute bottom-0 left-1/2 -translate-x-1/2 w-3/5 object-contain <%= it.karya.parts.badan ? '' : 'hidden' %>" />
+      <img data-layer="kepala" src="<%= it.karya.parts.kepala ? '/uploads/' + it.karya.parts.kepala.replace(/^uploads\//, '') : '' %>" alt=""
+        class="absolute top-4 left-1/2 -translate-x-1/2 w-2/5 object-contain <%= it.karya.parts.kepala ? '' : 'hidden' %>" />
+      <% if (!it.karya.parts.kepala && !it.karya.parts.badan && !it.karya.parts.background) { %>
+        <p class="absolute inset-0 flex items-center justify-center text-sm text-slate-400">No parts yet</p>
+      <% } %>
+    </div>
+
+    <!-- Part pickers -->
+    <div class="space-y-5">
+      <% const labels = { kepala: "Head", badan: "Body", background: "Background" }; %>
+      <% it.kategoriList.forEach(function (kat) { %>
+        <section class="bg-white border border-slate-200 rounded-xl p-4">
+          <div class="flex items-center justify-between mb-2">
+            <h2 class="font-semibold text-sm"><%= labels[kat] %></h2>
+            <label class="flex items-center gap-1 text-xs text-slate-500">
+              <input type="checkbox" class="layer-toggle" data-kategori="<%= kat %>"
+                <%= (it.karya.parts[kat] || it.byCategory[kat] && it.byCategory[kat].length > 0) ? 'checked' : 'disabled' %> />
+              Show
+            </label>
+          </div>
+          <% const parts = it.byCategory[kat] || []; %>
+          <% if (parts.length === 0) { %>
+            <p class="text-xs text-slate-400">No parts yet.</p>
+          <% } else { %>
+            <div class="grid grid-cols-4 gap-2">
+              <% parts.forEach(function (p, i) { %>
+                <button type="button" class="part-thumb <%= i === 0 ? 'ring-2 ring-indigo-500' : '' %>"
+                  data-kategori="<%= kat %>" data-src="/uploads/<%= p.media_path.replace(/^uploads\//, '') %>">
+                  <img src="/uploads/<%= p.media_path.replace(/^uploads\//, '') %>" alt=""
+                    class="w-full aspect-[3/4] object-cover rounded-lg border border-slate-200" />
+                </button>
+              <% }) %>
+            </div>
+          <% } %>
+        </section>
+      <% }) %>
+    </div>
+  </div>
+</div>
+
+<script src="/customizer.js"></script>

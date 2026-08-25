@@ -1,11 +1,20 @@
 import { randomUUID } from "crypto";
 import type { Database } from "bun:sqlite";
 
-/** Model: tabel karya + likes. */
+export type KaryaPart = {
+  id: string;
+  karya_id: string;
+  kategori: string; // 'kepala' | 'badan' | 'background'
+  media_path: string;
+  media_type: string | null;
+  created_at: string;
+};
+
+/** Model: karya + karya_parts + likes. */
 export class KaryaModel {
   constructor(private db: Database) {}
 
-  /** List semua karya (explore), optional filter kategori. */
+  /** List all karya (explore), optional kategori filter. */
   list(kategori?: string) {
     return kategori
       ? this.db
@@ -20,18 +29,57 @@ export class KaryaModel {
           .all();
   }
 
-  /** List karya milik satu user. */
+  /** List karya owned by one user. */
   byUser(userId: string) {
     return this.db
       .query("SELECT * FROM karya WHERE user_id = ? ORDER BY created_at DESC")
       .all(userId);
   }
 
-  /** Simpan karya baru, return id. */
+  /** Find one karya by id. */
+  findById(id: string) {
+    return this.db
+      .query("SELECT k.*, u.username FROM karya k JOIN users u ON u.id = k.user_id WHERE k.id = ?")
+      .get(id) as
+      | { id: string; user_id: string; judul: string; deskripsi: string | null; kategori: string | null; username: string }
+      | null;
+  }
+
+  /** Create new karya (no media — parts are added separately), return id. */
   create(data: {
     userId: string;
     judul: string;
     deskripsi: string;
+    kategori: string;
+  }): string {
+    const id = randomUUID();
+    this.db
+      .query(
+        "INSERT INTO karya (id, user_id, judul, deskripsi, kategori) VALUES (?, ?, ?, ?, ?)"
+      )
+      .run(id, data.userId, data.judul, data.deskripsi, data.kategori);
+    return id;
+  }
+
+  /** Delete karya. */
+  delete(id: string) {
+    this.db.query("DELETE FROM karya WHERE id = ?").run(id);
+  }
+
+  // --- parts ---
+
+  /** List parts of one karya (latest first per kategori). */
+  parts(karyaId: string): KaryaPart[] {
+    return this.db
+      .query(
+        "SELECT * FROM karya_parts WHERE karya_id = ? ORDER BY kategori, created_at DESC, id DESC"
+      )
+      .all(karyaId) as KaryaPart[];
+  }
+
+  /** Add a part image to a karya, return id. */
+  addPart(data: {
+    karyaId: string;
     kategori: string;
     mediaPath: string;
     mediaType: string;
@@ -39,21 +87,27 @@ export class KaryaModel {
     const id = randomUUID();
     this.db
       .query(
-        "INSERT INTO karya (id, user_id, judul, deskripsi, kategori, media_path, media_type) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO karya_parts (id, karya_id, kategori, media_path, media_type) VALUES (?, ?, ?, ?, ?)"
       )
-      .run(
-        id,
-        data.userId,
-        data.judul,
-        data.deskripsi,
-        data.kategori,
-        data.mediaPath,
-        data.mediaType
-      );
+      .run(id, data.karyaId, data.kategori, data.mediaPath, data.mediaType);
     return id;
   }
 
-  /** Toggle like: return true kalau jadi like, false kalau unlike. */
+  /** Find one part (for delete + file cleanup). */
+  findPart(partId: string): KaryaPart | null {
+    return this.db
+      .query("SELECT * FROM karya_parts WHERE id = ?")
+      .get(partId) as KaryaPart | null;
+  }
+
+  /** Delete one part. */
+  deletePart(partId: string) {
+    this.db.query("DELETE FROM karya_parts WHERE id = ?").run(partId);
+  }
+
+  // --- likes ---
+
+  /** Toggle like: return true if liked, false if unliked. */
   toggleLike(karyaId: string, userId: string): boolean {
     const exists = this.db
       .query("SELECT 1 FROM likes WHERE karya_id = ? AND user_id = ?")
@@ -68,5 +122,13 @@ export class KaryaModel {
       .query("INSERT INTO likes (karya_id, user_id) VALUES (?, ?)")
       .run(karyaId, userId);
     return true;
+  }
+
+  /** Number of likes on one karya. */
+  likeCount(karyaId: string): number {
+    const row = this.db
+      .query("SELECT COUNT(*) AS n FROM likes WHERE karya_id = ?")
+      .get(karyaId) as { n: number };
+    return row.n;
   }
 }

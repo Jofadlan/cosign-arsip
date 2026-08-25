@@ -1,10 +1,11 @@
 # CoSign
 
-> Platform portofolio anak Creative Media (CM) — share karya, explore karya teman,
-> dan bangun identitas angkatan. Terinspirasi dari [blush.design](https://blush.design).
+> Platform portofolio anak Creative Media (CM) — share karya, explore karya
+> teman, dan bangun identitas angkatan. Terinspirasi dari
+> [blush.design](https://blush.design/).
 
 ![Status](https://img.shields.io/badge/status-active-brightgreen)
-![Stack](https://img.shields.io/badge/stack-Bun%20%7C%20Hono%20%7C%20SQLite-blue)
+![Stack](https://img.shields.io/badge/stack-Bun%20%7C%20Hono%20%7C%20Eta%20%7C%20SQLite-blue)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
 ---
@@ -12,31 +13,39 @@
 ## Latar Belakang
 
 Anak Creative Media butuh tempat untuk memamerkan karya dan membangun identitas
-angkatan. CoSign menjawabnya dengan platform sederhana: setiap siswa bisa
-**upload karya** (poster, desain, video, dll.), **explore** karya teman,
-**like**, dan punya **halaman profil publik**.
+angkatan. CoSign menjawabnya dengan cara ala **blush.design**: setiap karya bisa
+disusun dari **bagian-bagian gambar** (kepala, badan, background) yang di-upload
+dan bisa digabung/di-custom menjadi satu komposisi — lalu di-explore dan
+di-like oleh teman.
 
 ## Arsitektur
 
-Alur: View (frontend statis) → fetch ke API (Hono) → Controller → Model → SQLite.
+Server-rendered MVC (gaya Laravel): Hono controller mengembalikan **view Eta**
+(HTML), semua submit via **form POST** + redirect (PRG). Tidak ada JSON API
+terpisah. Gambar part disimpan di `uploads/` dan di-serve statis.
 
 ```mermaid
 flowchart LR
-    Browser["Browser<br/>public/ · HTML + vanilla JS + Tailwind"]
-    API["Hono API<br/>/api/* · Middleware auth/session"]
-    Ctrl["Controllers<br/>auth · karya · profile"]
+    Browser["Browser<br/>form POST · Tailwind + vanilla JS"]
+    Web["Hono Web Routes<br/>/ · /admin/* · /karya/:id"]
+    Ctrl["Controllers<br/>auth · page · karya"]
     Model["Models<br/>user · session · karya"]
+    View["Eta Views<br/>views/ · layouts + partials"]
     DB[("SQLite<br/>data/app.db")]
+    UP[("uploads/*.png")]
 
-    Browser -->|fetch| API
-    API --> Ctrl
+    Browser -->|POST form| Web
+    Web --> Ctrl
     Ctrl --> Model
     Model --> DB
-    DB -->|"files<br/>uploads/"| Browser
+    Ctrl --> View
+    View --> Browser
+    Browser --> UP
 ```
 
 **Keamanan terpasang:** cookie session `httpOnly` + `sameSite=Lax`, password
-di-hash argon2 (`Bun.password`), `hono/csrf` + `secureHeaders` + `cors`.
+di-hash argon2 (`Bun.password`), `hono/csrf` (origin) di semua request,
+escape default Eta (`<%=`), validasi upload (hanya gambar, maks 20MB).
 
 ---
 
@@ -48,23 +57,28 @@ cosign/
 │   ├── index.ts                # entry: server Bun (port 3000, hot reload)
 │   ├── app.ts                  # build Hono app + middleware global + static
 │   ├── db.ts                   # koneksi DB (sqlite | supabase) + migrasi
+│   ├── view.ts                 # setup Eta + helper view()/redirect()/flash
+│   ├── composition.ts          # helper parts per kategori + like count
 │   ├── models/                 # MODEL — akses data / query SQL
-│   │   ├── user.model.ts       #   users: register, verifikasi password, profil
+│   │   ├── user.model.ts       #   users: register, verifyPassword (argon2)
 │   │   ├── session.model.ts    #   sessions: create/find/delete session cookie
-│   │   └── karya.model.ts      #   karya + likes: list, upload, toggle like
-│   ├── controllers/            # CONTROLLER — parse request → model → response
-│   │   ├── auth.controller.ts  #   /api/auth: register, login, logout, me
-│   │   ├── karya.controller.ts #   /api/karya: explore, upload, like
-│   │   └── profile.controller.ts # /api/profile: halaman profil publik
+│   │   └── karya.model.ts      #   karya + karya_parts + likes
+│   ├── controllers/            # CONTROLLER — form POST → model → view/redirect
+│   │   ├── auth.controller.ts  #   /admin/login, /admin/register, /admin/logout
+│   │   ├── page.controller.ts  #   GET / (explore), GET /profil/:username
+│   │   └── karya.controller.ts #   admin CRUD + parts, publik detail/customizer + like
 │   ├── middleware/
-│   │   └── auth.middleware.ts  # session cookie helpers + requireAuth
-│   ├── routes/
-│   │   └── index.ts            # router: pasang controller ke /api/*
-│   └── styles/input.css        # sumber Tailwind (compile → public/style.css)
-├── public/                     # VIEW — HTML statis + vanilla JS + CSS hasil
-│   ├── index.html              #   landing/explore
-│   ├── app.js                  #   fetch ke API
-│   └── style.css               #   hasil compile Tailwind (jangan diedit manual)
+│   │   ├── auth.middleware.ts  # session helpers + requireAuth + guest
+│   │   └── locals.middleware.ts # inject user login + flash ke context
+│   └── routes/
+│       └── web.ts              # router web: pasang controller + injectLocals
+├── views/                      # VIEW — template Eta (Blade/EJS-like)
+│   ├── layouts/                #   layout admin & homepage
+│   ├── partials/               #   navbar, error list, kartu karya ter-layer
+│   ├── admin/                  #   tampilan admin (auth + kelola karya/parts)
+│   └── homepage/               #   tampilan depan (explore, customizer, profil)
+├── public/                     # aset statis (style.css Tailwind, customizer.js)
+├── uploads/                    # gambar part hasil upload (di-gitignore)
 ├── supabase/migrations/        # skema SQL versi Supabase (opsional)
 ├── test/                       # unit test (`bun test`, SQLite in-memory)
 └── .github/                    # template issue/PR + CI
@@ -84,20 +98,30 @@ Build CSS produksi: `bun run build:css` — hasilnya `public/style.css`.
 
 ---
 
-## API
+## Rute
 
-| Method | Endpoint | Deskripsi | Auth |
-|--------|----------|-----------|------|
-| POST | `/api/auth/register` | Daftar `{username, password, full_name}` | - |
-| POST | `/api/auth/login` | Login → session cookie | - |
-| POST | `/api/auth/logout` | Hapus session | ✓ |
-| GET | `/api/auth/me` | User yang sedang login (null kalau belum) | - |
-| GET | `/api/karya?kategori=` | List karya (explore + filter) | - |
-| POST | `/api/karya` | Upload karya (multipart: judul, deskripsi, kategori, media) | ✓ |
-| POST | `/api/karya/:id/like` | Toggle like | ✓ |
-| GET | `/api/profile/:username` | Profil publik + karyanya | - |
+| Method | Path | View / Aksi | Auth |
+|--------|------|-------------|------|
+| GET | `/` | `homepage/index` — explore (filter kategori) | - |
+| GET | `/health` | health check | - |
+| GET | `/karya/:id` | `homepage/karya` — detail + customizer | - |
+| POST | `/karya/:id/like` | toggle like | ✓ |
+| GET | `/profil/:username` | `homepage/profil` — profil publik | - |
+| GET | `/admin/login` | `admin/auth/login` | guest |
+| POST | `/admin/login` | login → `/admin/karya` | guest |
+| GET | `/admin/register` | `admin/auth/register` | guest |
+| POST | `/admin/register` | buat user → `/admin/karya` | guest |
+| POST | `/admin/logout` | logout → `/` | ✓ |
+| GET | `/admin/karya` | `admin/karya/index` — karya saya + form buat | ✓ |
+| POST | `/admin/karya` | buat karya (judul, deskripsi, kategori) | ✓ |
+| GET | `/admin/karya/:id` | `admin/karya/show` — kelola parts | ✓ (owner) |
+| POST | `/admin/karya/:id/parts` | upload part gambar (kepala/badan/background) | ✓ (owner) |
+| POST | `/admin/karya/:id/parts/:pid/delete` | hapus part | ✓ (owner) |
+| POST | `/admin/karya/:id/delete` | hapus karya + semua file part | ✓ (owner) |
 
-Health check: `GET /api/ping` → `{ pong: true }`, `GET /health` → status driver DB.
+Semua mutasi via form POST (PRG). Upload part divalidasi: hanya
+`image/jpeg|png|gif|webp`, maksimal **20MB**, disimpan sebagai
+`uploads/<uuid>.<ext>`. Kategori part: `kepala`, `badan`, `background`.
 
 ---
 
@@ -113,9 +137,9 @@ tidak menyentuh `data/app.db`. Cakupan saat ini:
 | File | Menguji |
 |---|---|
 | `test/session.model.test.ts` | create/find/delete session |
-| `test/user.model.test.ts` | register, verifikasi password, tanpa bocor hash |
-| `test/karya.model.test.ts` | list + filter kategori, byUser, toggle like |
-| `test/api.test.ts` | integrasi API: auth flow, 401, upload, like, profil |
+| `test/user.model.test.ts` | register, verifyPassword, tanpa bocor hash |
+| `test/karya.model.test.ts` | CRUD karya, parts (add/list/find/delete), toggleLike, likeCount |
+| `test/web.test.ts` | render view, auth flow, buat karya, upload parts (valid/invalid), owner guard, customizer, like, profil, filter kategori, cleanup file |
 
 CI otomatis menjalankan `bun test` + `bun run build:css` di setiap push/PR ke
 `master`.
@@ -134,17 +158,16 @@ CI otomatis menjalankan `bun test` + `bun run build:css` di setiap push/PR ke
    ```
 
 Catatan: route saat ini **sqlite-first**. Saat pindah Supabase, tambahkan branch
-`db.supabase` di tiap route (pola `if (db.sqlite) { ... } else { ... }`).
+`db.supabase` di tiap controller (pola `if (db.sqlite) { ... } else { ... }`).
 
 ---
 
 ## Roadmap
 
-- **Frontend fungsional** — halaman login/upload/explore yang benar-benar
-  mengonsumsi API (saat ini masih placeholder ping).
-- **Supabase driver** — implementasikan branch `db.supabase` di tiap controller.
-- **Komentar pada karya** — diskusi antar siswa per karya.
-- **Follow antar user** — bangun feed personal.
+- **Edit profil & bio** — lengkapi identitas user di halaman profil.
+- **Customizer lanjutan** — posisi/ukuran part tersimpan per karya.
+- **Komentar pada karya** — diskusi antar siswa.
+- **Supabase driver** — implementasikan branch `db.supabase` di controller.
 
 Lihat [issue-issue](https://github.com/ccit-venture/cosign/issues) untuk daftar
 pekerjaan yang sedang/akan dikerjakan.

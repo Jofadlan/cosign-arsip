@@ -1,0 +1,38 @@
+<% layout("/layouts/homepage") %>
+<% it.title = "CoSign — Creative Media Portfolio" %>
+
+<header class="text-center py-12">
+  <h1 class="text-4xl font-extrabold">
+    Share your <span class="text-indigo-600">creative work</span>
+  </h1>
+  <p class="mt-3 text-slate-600 max-w-xl mx-auto">
+    Upload your designs, build compositions from head, body & background parts — and explore what your friends are making.
+  </p>
+  <div class="mt-6 flex justify-center gap-4">
+    <a href="/admin/register" class="bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700">Start sharing</a>
+    <a href="/admin/login" class="border border-slate-300 px-6 py-3 rounded-lg font-semibold hover:bg-slate-100">Sign in</a>
+  </div>
+</header>
+
+<div class="flex flex-wrap justify-center gap-2 mb-8">
+  <a href="/"
+    class="<%= it.aktif === '' ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-300 text-slate-600 hover:bg-slate-100' %> px-4 py-1.5 rounded-full text-sm font-medium">
+    All
+  </a>
+  <% it.kategoriList.forEach(function (k) { %>
+    <a href="/?kategori=<%= k %>"
+      class="<%= it.aktif === k ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-300 text-slate-600 hover:bg-slate-100' %> px-4 py-1.5 rounded-full text-sm font-medium">
+      <%= k %>
+    </a>
+  <% }) %>
+</div>
+
+<% if (it.karya.length === 0) { %>
+  <p class="text-center text-slate-500 py-10">No works here yet. Be the first to share!</p>
+<% } else { %>
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
+    <% it.karya.forEach(function (k) { %>
+      <%~ include("/partials/karya-card", { k: k }) %>
+    <% }) %>
+  </div>
+<% } %>

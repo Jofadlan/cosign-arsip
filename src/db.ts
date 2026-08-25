@@ -57,6 +57,13 @@ export function migrate(db: Database) {
       judul TEXT NOT NULL,
       deskripsi TEXT,
       kategori TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS karya_parts (
+      id TEXT PRIMARY KEY,
+      karya_id TEXT NOT NULL,
+      kategori TEXT NOT NULL,      -- 'kepala' | 'badan' | 'background'
       media_path TEXT NOT NULL,
       media_type TEXT,
       created_at TEXT DEFAULT (datetime('now'))
@@ -68,4 +75,12 @@ export function migrate(db: Database) {
       PRIMARY KEY (karya_id, user_id)
     );
   `);
+
+  // Migrate old karya schema (media_path/media_type column) → karya_parts
+  const cols = db.query("PRAGMA table_info(karya)").all() as { name: string }[];
+  if (cols.some((c) => c.name === "media_path")) {
+    db.exec(
+      "ALTER TABLE karya DROP COLUMN media_path; ALTER TABLE karya DROP COLUMN media_type;"
+    );
+  }
 }
