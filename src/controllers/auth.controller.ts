@@ -4,53 +4,83 @@ import { UserModel } from "../models/user.model";
 import {
   createSession,
   destroySession,
-  getUserId,
+  redirectIfAuthenticated,
+  requireAuth,
 } from "../middleware/auth.middleware";
+import { view, redirect, flashSuccess, flashError } from "../view";
 
-/** Controller: /api/auth — register, login, logout, me. */
+/** Controller: /admin/auth — register, login, logout (form POST). */
 export function authController(db: Db) {
-  const api = new Hono();
+  const app = new Hono();
 
   if (!db.sqlite) {
-    api.all("*", (c) => c.json({ error: "mode supabase belum diimplementasikan" }, 501));
-    return api;
+    app.all("*", (c) => c.text("supabase mode not implemented", 501));
+    return app;
   }
 
   const users = new UserModel(db.sqlite);
 
-  api.post("/register", async (c) => {
-    const { username, password, full_name } = await c.req.json();
-    if (!username || !password) {
-      return c.json({ error: "username & password wajib" }, 400);
+  app.get("/login", redirectIfAuthenticated(db), (c) =>
+    view(c, "admin/auth/login", { errors: null, old: {} })
+  );
+
+  app.post("/login", redirectIfAuthenticated(db), async (c) => {
+    const body = await c.req.parseBody();
+    const username = String(body.username ?? "").trim();
+    const password = String(body.password ?? "");
+
+    const id = await users.verifyPassword(username, password);
+    if (!id) {
+      return view(c, "admin/auth/login", {
+        errors: ["Invalid username or password."],
+        old: { username },
+      });
+    }
+
+    await createSession(c, db, id);
+    flashSuccess(c, "Welcome back!");
+    return redirect(c, "/admin/karya");
+  });
+
+  app.get("/register", redirectIfAuthenticated(db), (c) =>
+    view(c, "admin/auth/register", { errors: null, old: {} })
+  );
+
+  app.post("/register", redirectIfAuthenticated(db), async (c) => {
+    const body = await c.req.parseBody();
+    const username = String(body.username ?? "").trim();
+    const password = String(body.password ?? "");
+    const fullName = String(body.full_name ?? "").trim();
+
+    const errors: string[] = [];
+    if (!username || username.length < 3) {
+      errors.push("Username must be at least 3 characters.");
+    }
+    if (!password || password.length < 6) {
+      errors.push("Password must be at least 6 characters.");
     }
     if (users.findByUsername(username)) {
-      return c.json({ error: "username sudah dipakai" }, 409);
+      errors.push("That username is already taken.");
     }
 
-    const id = await users.create(username, password, full_name);
+    if (errors.length) {
+      return view(c, "admin/auth/register", {
+        errors,
+        old: { username, full_name: fullName },
+      });
+    }
+
+    const id = await users.create(username, password, fullName || undefined);
     await createSession(c, db, id);
-    return c.json({ ok: true, username }, 201);
+    flashSuccess(c, "Account created. Welcome to CoSign!");
+    return redirect(c, "/admin/karya");
   });
 
-  api.post("/login", async (c) => {
-    const { username, password } = await c.req.json();
-    const id = await users.verifyPassword(username, password);
-    if (!id) return c.json({ error: "username/password salah" }, 401);
-
-    await createSession(c, db, id);
-    return c.json({ ok: true, username });
-  });
-
-  api.post("/logout", (c) => {
+  app.post("/logout", requireAuth(db), (c) => {
     destroySession(c, db);
-    return c.json({ ok: true });
+    flashSuccess(c, "Signed out.");
+    return redirect(c, "/");
   });
 
-  api.get("/me", (c) => {
-    const userId = getUserId(c, db);
-    if (!userId) return c.json({ user: null });
-    return c.json({ user: users.findPublic(userId) });
-  });
-
-  return api;
+  return app;
 }

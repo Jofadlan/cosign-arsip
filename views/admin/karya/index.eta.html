@@ -1,0 +1,56 @@
+<% layout("/layouts/admin") %>
+<% it.title = "My Work — CoSign" %>
+
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-bold">My Work</h1>
+  <details class="relative">
+    <summary class="bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold cursor-pointer list-none">+ Create Work</summary>
+    <form method="post" action="/admin/karya"
+      class="absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-xl p-4 shadow-lg space-y-3 z-10">
+      <div>
+        <label class="block text-sm font-medium mb-1">Title</label>
+        <input name="judul" required placeholder="Poster Konser Amal"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">Description</label>
+        <textarea name="deskripsi" rows="3" placeholder="Short description of your work"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2"></textarea>
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">Category</label>
+        <select name="kategori" class="w-full border border-slate-300 rounded-lg px-3 py-2">
+          <% it.kategoriList.forEach(function (k) { %>
+            <option value="<%= k %>"><%= k %></option>
+          <% }) %>
+        </select>
+      </div>
+      <button type="submit" class="w-full bg-indigo-600 text-white font-semibold py-2 rounded-lg">Create & Manage Parts</button>
+    </form>
+  </details>
+</div>
+
+<% if (it.karya.length === 0) { %>
+  <p class="text-slate-500">You haven't created any work yet. Click "Create Work" to start — then add head, body & background images like blush.design.</p>
+<% } else { %>
+  <div class="grid gap-4">
+    <% it.karya.forEach(function (k) { %>
+      <div class="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between">
+        <div>
+          <p class="font-semibold"><%= k.judul %>
+            <span class="ml-2 text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full"><%= k.kategori %></span>
+          </p>
+          <p class="text-xs text-slate-400"><%= k.part_count %> parts · Created <%= k.created_at %></p>
+        </div>
+        <div class="flex items-center gap-3">
+          <a href="/karya/<%= k.id %>" target="_blank" rel="noopener" class="text-slate-500 hover:underline text-sm">View</a>
+          <a href="/admin/karya/<%= k.id %>" class="text-indigo-600 hover:underline text-sm">Manage Parts</a>
+          <form method="post" action="/admin/karya/<%= k.id %>/delete" class="inline"
+            onsubmit="return confirm('Delete this work? All parts will be removed.')">
+            <button type="submit" class="text-red-600 hover:underline text-sm">Delete</button>
+          </form>
+        </div>
+      </div>
+    <% }) %>
+  </div>
+<% } %>

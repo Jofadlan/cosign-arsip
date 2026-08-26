@@ -1,0 +1,23 @@
+<% /* Layered composition card — used in explore & profile grids. Data: it.k = { judul, username, kategori, like_count, parts: { kepala, badan, background } } */ %>
+<a href="/karya/<%= it.k.id %>" class="block bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow">
+  <div class="relative aspect-[3/4] bg-slate-100">
+    <% if (it.k.parts && it.k.parts.background) { %>
+      <img src="/uploads/<%= it.k.parts.background %>" alt="" class="absolute inset-0 w-full h-full object-cover" />
+    <% } %>
+    <% if (it.k.parts && it.k.parts.badan) { %>
+      <img src="/uploads/<%= it.k.parts.badan %>" alt="" class="absolute bottom-0 left-1/2 -translate-x-1/2 w-3/5 object-contain" />
+    <% } %>
+    <% if (it.k.parts && it.k.parts.kepala) { %>
+      <img src="/uploads/<%= it.k.parts.kepala %>" alt="" class="absolute top-4 left-1/2 -translate-x-1/2 w-2/5 object-contain" />
+    <% } %>
+    <% if (!it.k.parts || (!it.k.parts.kepala && !it.k.parts.badan && !it.k.parts.background)) { %>
+      <p class="absolute inset-0 flex items-center justify-center text-xs text-slate-400">No parts yet</p>
+    <% } %>
+  </div>
+  <div class="p-3">
+    <p class="font-semibold text-sm truncate"><%= it.k.judul %></p>
+    <p class="text-xs text-slate-500">
+      by <%= it.k.username %> · <%= it.k.like_count %> <%= it.k.like_count === 1 ? "like" : "likes" %>
+    </p>
+  </div>
+</a>
