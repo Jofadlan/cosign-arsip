@@ -61,18 +61,22 @@ export class KaryaModel {
     return id;
   }
 
-  /** Delete karya. */
+  /** Delete karya + its parts and likes (no FK cascade in sqlite). */
   delete(id: string) {
-    this.db.query("DELETE FROM karya WHERE id = ?").run(id);
+    this.db.transaction(() => {
+      this.db.query("DELETE FROM karya_parts WHERE karya_id = ?").run(id);
+      this.db.query("DELETE FROM likes WHERE karya_id = ?").run(id);
+      this.db.query("DELETE FROM karya WHERE id = ?").run(id);
+    })();
   }
 
   // --- parts ---
 
-  /** List parts of one karya (latest first per kategori). */
+  /** List parts of one karya (latest first per kategori, by insert order). */
   parts(karyaId: string): KaryaPart[] {
     return this.db
       .query(
-        "SELECT * FROM karya_parts WHERE karya_id = ? ORDER BY kategori, created_at DESC, id DESC"
+        "SELECT * FROM karya_parts WHERE karya_id = ? ORDER BY kategori, rowid DESC"
       )
       .all(karyaId) as KaryaPart[];
   }

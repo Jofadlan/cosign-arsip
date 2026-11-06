@@ -61,10 +61,9 @@ describe("KaryaModel", () => {
     const parts = karya.parts(id);
     expect(parts).toHaveLength(3);
 
-    // both kepala parts present (created_at has 1s granularity — no strict order)
+    // latest insert first per category (rowid DESC — created_at has 1s granularity)
     const kepala = parts.filter((p) => p.kategori === "kepala");
-    expect(kepala).toHaveLength(2);
-    expect(kepala.map((p) => p.id).sort()).toEqual([p1, p2].sort());
+    expect(kepala.map((p) => p.id)).toEqual([p2, p1]);
 
     expect(karya.findPart(p1)?.karya_id).toBe(id);
     karya.deletePart(p1);
@@ -72,13 +71,18 @@ describe("KaryaModel", () => {
     expect(karya.findPart(p1)).toBeNull();
   });
 
-  test("delete removes karya", async () => {
+  test("delete removes karya + parts + likes", async () => {
     const db = createTestDb();
     const { userId, karya } = await seed(db);
 
     const id = karya.create({ userId, judul: "A", deskripsi: "", kategori: "desain" });
+    karya.addPart({ karyaId: id, kategori: "kepala", mediaPath: "uploads/k1.png", mediaType: "image/png" });
+    karya.toggleLike(id, userId);
+
     karya.delete(id);
     expect(karya.findById(id)).toBeNull();
+    expect(karya.parts(id)).toHaveLength(0);
+    expect(karya.likeCount(id)).toBe(0);
   });
 
   test("toggleLike: like → unlike, likeCount", async () => {

@@ -4,7 +4,7 @@ import { KaryaModel, type KaryaPart } from "./models/karya.model";
 export function latestParts(parts: KaryaPart[]): Record<string, string> {
   const map: Record<string, string> = {};
   for (const p of parts) {
-    if (!map[p.kategori]) map[p.kategori] = p.media_path;
+    if (!map[p.kategori]) map[p.kategori] = p.media_path.replace(/^uploads\//, "");
   }
   return map;
 }

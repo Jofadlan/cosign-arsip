@@ -272,6 +272,118 @@ describe("Web — karya (auth)", () => {
     expect(await page.text()).toContain("Only image files are allowed");
   });
 
+  test("upload image with .html filename → rejected (no stored XSS)", async () => {
+    const app = createTestApp();
+    const cookie = await registerUser(app);
+
+    const create = await app.request("/admin/karya", {
+      method: "POST",
+      headers: { cookie, ...formPostHeaders },
+      body: new URLSearchParams({ judul: "A", deskripsi: "", kategori: "desain" }).toString(),
+    });
+    const karyaId = create.headers.get("location")!.split("/").pop()!;
+
+    const evil = new File(["<script>alert(1)</script>"], "evil.html", { type: "image/png" });
+    const res = await uploadPart(app, cookie, karyaId, "kepala", evil);
+    expect(res.status).toBe(302);
+
+    const sidCookie = cookie.split(";")[0];
+    const page = await app.request(`/admin/karya/${karyaId}`, {
+      headers: { cookie: `${sidCookie}; ${cookieFrom(res)}` },
+    });
+    const html = await page.text();
+    expect(html).toContain("Only image files are allowed");
+    expect(html).not.toContain("evil.html");
+
+    await app.request(`/admin/karya/${karyaId}/delete`, {
+      method: "POST",
+      headers: { cookie, ...formHeaders },
+    });
+  });
+
+  test("upload image with .png filename → saved as .png (ext from MIME, not name)", async () => {
+    const app = createTestApp();
+    const cookie = await registerUser(app);
+
+    const create = await app.request("/admin/karya", {
+      method: "POST",
+      headers: { cookie, ...formPostHeaders },
+      body: new URLSearchParams({ judul: "A", deskripsi: "", kategori: "desain" }).toString(),
+    });
+    const karyaId = create.headers.get("location")!.split("/").pop()!;
+
+    const evil = new File(["<script>alert(1)</script>"], "evil.png", { type: "image/png" });
+    await uploadPart(app, cookie, karyaId, "kepala", evil);
+
+    const manage = await (await app.request(`/admin/karya/${karyaId}`, { headers: { cookie } })).text();
+    const file = manage.match(/\/uploads\/([0-9a-f-]+\.\w+)/)?.[1];
+    expect(file).toMatch(/\.png$/);
+
+    await app.request(`/admin/karya/${karyaId}/delete`, {
+      method: "POST",
+      headers: { cookie, ...formHeaders },
+    });
+  });
+
+  test("homepage card image src is not /uploads/uploads/", async () => {
+    const app = createTestApp();
+    const cookie = await registerUser(app);
+
+    const create = await app.request("/admin/karya", {
+      method: "POST",
+      headers: { cookie, ...formPostHeaders },
+      body: new URLSearchParams({ judul: "Kartu", deskripsi: "", kategori: "desain" }).toString(),
+    });
+    const karyaId = create.headers.get("location")!.split("/").pop()!;
+    await uploadPart(app, cookie, karyaId, "kepala");
+
+    const home = await (await app.request("/")).text();
+    expect(home).toContain("/uploads/");
+    expect(home).not.toContain("/uploads/uploads/");
+
+    await app.request(`/admin/karya/${karyaId}/delete`, {
+      method: "POST",
+      headers: { cookie, ...formHeaders },
+    });
+  });
+
+  test("cross-karya: part of karya B cannot be deleted via karya A route", async () => {
+    const app = createTestApp();
+    const cookie = await registerUser(app);
+
+    const mk = async (judul: string) => {
+      const res = await app.request("/admin/karya", {
+        method: "POST",
+        headers: { cookie, ...formPostHeaders },
+        body: new URLSearchParams({ judul, deskripsi: "", kategori: "desain" }).toString(),
+      });
+      return res.headers.get("location")!.split("/").pop()!;
+    };
+    const a = await mk("A");
+    const b = await mk("B");
+    await uploadPart(app, cookie, b, "kepala");
+
+    const manageB = await (await app.request(`/admin/karya/${b}`, { headers: { cookie } })).text();
+    const partB = manageB.match(/\/parts\/([0-9a-f-]+)\/delete/)?.[1]!;
+
+    const res = await app.request(`/admin/karya/${a}/parts/${partB}/delete`, {
+      method: "POST",
+      headers: { cookie, ...formHeaders },
+    });
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(`/admin/karya/${a}`);
+
+    const checkB = await (await app.request(`/admin/karya/${b}`, { headers: { cookie } })).text();
+    expect(checkB).toContain(`/parts/${partB}/delete`);
+
+    for (const id of [a, b]) {
+      await app.request(`/admin/karya/${id}/delete`, {
+        method: "POST",
+        headers: { cookie, ...formHeaders },
+      });
+    }
+  });
+
   test("upload part without file → flash error", async () => {
     const app = createTestApp();
     const cookie = await registerUser(app);

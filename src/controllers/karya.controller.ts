@@ -9,7 +9,12 @@ import { partsByCategory, latestParts } from "../composition";
 import { KATEGORI_LIST } from "./page.controller";
 
 export const PART_KATEGORI = ["kepala", "badan", "background"];
-const IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+const IMAGE_EXT = new Map([
+  ["image/jpeg", "jpg"],
+  ["image/png", "png"],
+  ["image/gif", "gif"],
+  ["image/webp", "webp"],
+]);
 const MAX_IMAGE_SIZE = 20 * 1024 * 1024; // 20MB
 const UPLOAD_DIR = "uploads"; // must stay in sync with serveStatic /uploads/* in app.ts
 
@@ -21,13 +26,14 @@ function isOwner(item: { user_id: string }, userId: string) {
 function saveImage(
   file: File
 ): { ok: true; path: string } | { ok: false; error: string } {
-  if (!IMAGE_TYPES.includes(file.type)) {
+  const type = file.type.trim().toLowerCase();
+  if (!IMAGE_EXT.has(type)) {
     return { ok: false, error: "Only image files are allowed (JPG, PNG, GIF, WEBP)." };
   }
   if (file.size > MAX_IMAGE_SIZE) {
     return { ok: false, error: "Image size limit is 20MB." };
   }
-  const ext = (file.name.split(".").pop() ?? "bin").toLowerCase();
+  const ext = IMAGE_EXT.get(type);
   const path = `${UPLOAD_DIR}/${randomUUID()}.${ext}`;
   return { ok: true, path };
 }
@@ -140,7 +146,7 @@ export function karyaAdminController(db: Db) {
       return redirect(c, "/admin/karya");
     }
     const part = karya.findPart(c.req.param("pid"));
-    if (!part) {
+    if (!part || part.karya_id !== id) {
       flashError(c, "Part not found.");
       return redirect(c, `/admin/karya/${id}`);
     }
